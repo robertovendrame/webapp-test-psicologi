@@ -518,6 +518,43 @@ document.addEventListener('DOMContentLoaded', ()=>{
   document.querySelectorAll('.btn-back-home').forEach(btn=>btn.addEventListener('click', ()=> showView('home')));
 
   // remaining wiring: reuse original handlers where possible
+  
+  /* PDF Download functions */
+  window.downloadPDFReport = function(mode = 'test') {
+    let record, test;
+    
+    if (mode === 'history' && currentHistoryRecord && currentHistoryTest) {
+      record = currentHistoryRecord;
+      test = currentHistoryTest;
+    } else if (mode === 'patient' && currentPatientTestRecord && currentPatientTest) {
+      record = currentPatientTestRecord;
+      test = currentPatientTest;
+    } else if (mode === 'scoring' && currentScoringRecord && currentScoringTest) {
+      record = currentScoringRecord;
+      test = currentScoringTest;
+    } else {
+      alert('Nessun test selezionato per il download PDF.');
+      return;
+    }
+
+    if (!record || !test) return;
+
+    const htmlContent = document.getElementById('printable-report').innerHTML;
+    const filename = `${test.name.replace(/\s+/g, '_')}_${record.patientName || 'report'}_${formatDate(record.date || new Date().toISOString().slice(0, 10))}.pdf`;
+    
+    // Configurazione html2pdf
+    const opt = {
+      margin: 10,
+      filename: filename,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2 },
+      jsPDF: { orientation: 'portrait', unit: 'mm', format: 'a4' }
+    };
+
+    // Genera e scarica il PDF
+    html2pdf().set(opt).from(htmlContent).save();
+  };
+
   document.getElementById('btn-patient-save').addEventListener('click', savePatientFromForm);
   document.getElementById('btn-patient-new').addEventListener('click', resetPatientForm);
   const btnPatientDelete = document.getElementById('btn-patient-delete'); if (btnPatientDelete) btnPatientDelete.addEventListener('click', openConfirmDeletePatient);
