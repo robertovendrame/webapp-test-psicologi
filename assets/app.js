@@ -198,6 +198,126 @@
     localStorage.removeItem(PIN_SESSION_OK_KEY);
   }
 
+  /********** AUTH: PBKDF2 (Web Crypto) + WebAuthn helpers **********/
+  function arrayBufferToBase64(buffer) {
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+    return btoa(binary);
+  }
+
+  function base64ToArrayBuffer(b64) {
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes.buffer;
+  }
+
+  async function deriveKeyBits(password, saltB64, iterations = 150000) {
+    const enc = new TextEncoder();
+    const pwBuf = enc.encode(password);
+    const key = await crypto.subtle.importKey('raw', pwBuf, 'PBKDF2', false, ['deriveBits']);
+    const salt = saltB64 ? new Uint8Array(base64ToArrayBuffer(saltB64)) : crypto.getRandomValues(new Uint8Array(16));
+    const derived = await crypto.subtle.deriveBits(
+      { name: 'PBKDF2', salt, iterations, hash: 'SHA-256' },
+      key,
+      256
+    );
+    return { salt: arrayBufferToBase64(salt.buffer), derived: arrayBufferToBase64(derived), iterations };
+  }
+
+  function getStoredAuth() {
+    try { return JSON.parse(localStorage.getItem('app_auth') || 'null'); } catch { return null; }
+  }
+
+  function setStoredAuth(obj) {
+    localStorage.setItem('app_auth', JSON.stringify(obj));
+  }
+
+  async function setPassword(password) {
+    const { salt, derived, iterations } = await deriveKeyBits(password, null);
+    setStoredAuth({ salt, hash: derived, iterations });
+  }
+
+  async function removePassword() {
+    localStorage.removeItem('app_auth');
+  }
+
+  async function verifyPassword(password) {
+    const auth = getStoredAuth();
+    if (!auth) return false;
+    const { derived } = await deriveKeyBits(password, auth.salt, auth.iterations || 150000);
+    // constant-time compare
+    const a = base64ToArrayBuffer(derived);
+    const b = base64ToArrayBuffer(auth.hash);
+    if (a.byteLength !== b.byteLength) return false;
+    const aa = new Uint8Array(a), bb = new Uint8Array(b);
+    let diff = 0;
+    for (let i = 0; i < aa.length; i++) diff |= aa[i] ^ bb[i];
+    return diff === 0;
+  }
+
+  async function ensureAuthInitialized() {
+    const auth = getStoredAuth();
+    if (!auth) {
+      // migrate default APP_PASSWORD (only first-run) to stored hash
+      try {
+        const { salt, derived, iterations } = await deriveKeyBits(APP_PASSWORD, null);
+        setStoredAuth({ salt, hash: derived, iterations });
+        console.log('Auth initialized (migrated default password)');
+      } catch (err) {
+        console.error('Failed to initialize auth:', err);
+      }
+    }
+  }
+
+  // WebAuthn helpers (client-only simplified flow)
+  function getStoredWebAuthnId() {
+    return localStorage.getItem('webauthn_cred') || null;
+  }
+
+  function setStoredWebAuthnId(b64) {
+    if (!b64) localStorage.removeItem('webauthn_cred');
+    else localStorage.setItem('webauthn_cred', b64);
+  }
+
+  function isWebAuthnSupported() {
+    return !!(window.PublicKeyCredential && navigator.credentials);
+  }
+
+  async function registerWebAuthn() {
+    if (!isWebAuthnSupported()) throw new Error('WebAuthn non supportato');
+    const challenge = crypto.getRandomValues(new Uint8Array(32));
+    const userId = crypto.getRandomValues(new Uint8Array(16));
+    const publicKey = {
+      challenge: challenge,
+      rp: { name: APP_NAME },
+      user: { id: userId, name: 'local', displayName: 'Local User' },
+      pubKeyCredParams: [{ type: 'public-key', alg: -7 }],
+      timeout: 60000,
+      attestation: 'none'
+    };
+    const cred = await navigator.credentials.create({ publicKey });
+    if (!cred) throw new Error('Creazione credenziale fallita');
+    const rawId = cred.rawId;
+    const b64 = arrayBufferToBase64(rawId);
+    setStoredWebAuthnId(b64);
+    return b64;
+  }
+
+  async function authenticateWebAuthn() {
+    if (!isWebAuthnSupported()) throw new Error('WebAuthn non supportato');
+    const idB64 = getStoredWebAuthnId();
+    if (!idB64) throw new Error('Nessuna credenziale registrata');
+    const allow = [{ type: 'public-key', id: new Uint8Array(base64ToArrayBuffer(idB64)) }];
+    const challenge = crypto.getRandomValues(new Uint8Array(32));
+    const publicKey = { challenge, allowCredentials: allow, timeout: 60000, userVerification: 'preferred' };
+    const assertion = await navigator.credentials.get({ publicKey });
+    if (!assertion) throw new Error('Autenticazione fallita');
+    // In client-only scenario, success of get() is treated as proof of presence
+    return true;
+  }
+
   /********** STORAGE – PAZIENTI **********/
   function loadPatients() {
     let arr = [];
@@ -1628,7 +1748,7 @@
   }
 
   /********** LOGIN SYSTEM **********/
-  function initLoginSystem() {
+  async function initLoginSystem() {
     const loginForm = document.getElementById('login-form');
     const loginPasswordInput = document.getElementById('login-password');
     const loginError = document.getElementById('login-error');
@@ -1649,6 +1769,9 @@
       return;
     }
 
+    // Ensure auth storage is initialized (migrate default password on first run)
+    await ensureAuthInitialized();
+
     // Check if user is already logged in this session
     const isLoggedIn = sessionStorage.getItem(LOGIN_SESSION_KEY) === 'true';
     console.log('Is logged in:', isLoggedIn);
@@ -1658,25 +1781,44 @@
       showLoginPage(true);
     }
 
-    // Login form submission
-    loginForm.addEventListener('submit', (e) => {
+    // Login form submission (uses verifyPassword)
+    loginForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const password = loginPasswordInput.value.trim();
-      console.log('Login attempt with password:', password, 'Expected:', APP_PASSWORD);
-      
-      if (password === APP_PASSWORD) {
-        console.log('Login SUCCESS');
-        sessionStorage.setItem(LOGIN_SESSION_KEY, 'true');
-        loginError.textContent = '';
-        loginPasswordInput.value = '';
-        showLoginPage(false);
-      } else {
-        console.log('Login FAILED');
-        loginError.textContent = 'Password non corretta. Riprova.';
-        loginPasswordInput.value = '';
-        loginPasswordInput.focus();
+      console.log('Login attempt (verify)');
+      try {
+        const ok = await verifyPassword(password);
+        if (ok) {
+          sessionStorage.setItem(LOGIN_SESSION_KEY, 'true');
+          loginError.textContent = '';
+          loginPasswordInput.value = '';
+          showLoginPage(false);
+        } else {
+          loginError.textContent = 'Password non corretta. Riprova.';
+          loginPasswordInput.value = '';
+          loginPasswordInput.focus();
+        }
+      } catch (err) {
+        console.error('Error verifying password', err);
+        loginError.textContent = 'Errore interno. Riprova.';
       }
     });
+
+    // Biometric login button (if present)
+    const loginBioBtn = document.getElementById('btn-login-bio');
+    if (loginBioBtn) {
+      loginBioBtn.addEventListener('click', async () => {
+        loginError.textContent = '';
+        try {
+          await authenticateWebAuthn();
+          sessionStorage.setItem(LOGIN_SESSION_KEY, 'true');
+          showLoginPage(false);
+        } catch (err) {
+          console.error('WebAuthn login failed', err);
+          loginError.textContent = 'Autenticazione biometrica fallita.';
+        }
+      });
+    }
 
     // Logout button (guard if not present)
     if (logoutBtn) {
@@ -1688,6 +1830,67 @@
           loginError.textContent = '';
         }
       });
+    }
+
+    // Settings: password and WebAuthn handlers
+    const savePasswordBtn = document.getElementById('btn-save-password');
+    const removePasswordBtn = document.getElementById('btn-remove-password');
+    const passNewInput = document.getElementById('settings-password-new');
+    const passConfirmInput = document.getElementById('settings-password-confirm');
+    const passStatus = document.getElementById('settings-password-status');
+    const enableBioBtn = document.getElementById('btn-enable-bio');
+    const disableBioBtn = document.getElementById('btn-disable-bio');
+    const webauthnStatus = document.getElementById('webauthn-status');
+
+    if (savePasswordBtn && passNewInput && passConfirmInput) {
+      savePasswordBtn.addEventListener('click', async () => {
+        const a = passNewInput.value || '';
+        const b = passConfirmInput.value || '';
+        passStatus.textContent = '';
+        if (!a) return passStatus.textContent = 'Inserisci la nuova password.';
+        if (a !== b) return passStatus.textContent = 'Le password non corrispondono.';
+        try {
+          await setPassword(a);
+          passStatus.textContent = 'Password salvata.';
+          passNewInput.value = '';
+          passConfirmInput.value = '';
+        } catch (err) {
+          console.error('Failed to set password', err);
+          passStatus.textContent = 'Errore salvataggio password.';
+        }
+      });
+    }
+
+    if (removePasswordBtn) {
+      removePasswordBtn.addEventListener('click', async () => {
+        if (!confirm('Rimuovere la password dell\'app? Questo disabiliterà la protezione.')) return;
+        await removePassword();
+        if (passStatus) passStatus.textContent = 'Password rimossa.';
+      });
+    }
+
+    if (enableBioBtn && webauthnStatus) {
+      enableBioBtn.addEventListener('click', async () => {
+        try {
+          await registerWebAuthn();
+          webauthnStatus.textContent = 'Biometria abilitata.';
+        } catch (err) {
+          console.error(err);
+          webauthnStatus.textContent = 'Abilitazione biometria fallita.';
+        }
+      });
+    }
+
+    if (disableBioBtn && webauthnStatus) {
+      disableBioBtn.addEventListener('click', () => {
+        setStoredWebAuthnId(null);
+        webauthnStatus.textContent = 'Biometria disabilitata.';
+      });
+    }
+
+    // initialize status UI
+    if (webauthnStatus) {
+      webauthnStatus.textContent = getStoredWebAuthnId() ? 'Biometria abilitata' : 'Biometria non configurata';
     }
   }
 

@@ -65,6 +65,7 @@
           <input type="password" id="login-password" name="password" placeholder="Password" required autocomplete="off" />
         </div>
         <button type="submit" class="btn primary btn-login">Accedi</button>
+        <button type="button" class="btn outline btn-login-bio" id="btn-login-bio" style="margin-left:0.5rem;">Accedi con Touch ID</button>
         <div id="login-error" class="login-error"></div>
       </form>
     </div>
@@ -281,6 +282,32 @@
         <button class="btn primary small" id="btn-save-pin">Salva PIN</button>
         <button class="btn outline small" id="btn-remove-pin">Rimuovi PIN</button>
         <span class="muted" id="settings-pin-status"></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Accesso App</h2>
+      <div class="field">
+        <label for="settings-password-new">Imposta / modifica password app</label>
+        <input type="password" id="settings-password-new" placeholder="Nuova password" autocomplete="new-password" />
+      </div>
+      <div class="field">
+        <label for="settings-password-confirm">Conferma password</label>
+        <input type="password" id="settings-password-confirm" placeholder="Conferma password" autocomplete="new-password" />
+      </div>
+      <div class="btn-group">
+        <button class="btn primary small" id="btn-save-password">Salva password</button>
+        <button class="btn outline small" id="btn-remove-password">Rimuovi password (disabilita protezione)</button>
+        <span class="muted" id="settings-password-status"></span>
+      </div>
+
+      <hr />
+      <h3>Biometria (Touch ID / Face ID)</h3>
+      <p class="muted">Abilita l'accesso con l'impronta digitale / Face ID se il dispositivo lo supporta.</p>
+      <div class="btn-group">
+        <button class="btn primary small" id="btn-enable-bio">Abilita biometria</button>
+        <button class="btn outline small" id="btn-disable-bio">Disabilita biometria</button>
+        <span class="muted" id="webauthn-status"></span>
       </div>
     </div>
 
