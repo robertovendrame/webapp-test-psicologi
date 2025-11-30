@@ -5,6 +5,8 @@
   const PIN_SESSION_OK_KEY = "ilaria_psy_tests_pin_session_ok";
   const PIN_REMEMBER_SESSION_KEY = "ilaria_psy_tests_pin_remember";
   const PATIENTS_KEY = "ilaria_psy_tests_patients";
+  const LOGIN_SESSION_KEY = "ilaria_psy_tests_login_session";
+  const APP_PASSWORD = "2525"; // Password di accesso all'app
 
   /********** TEST – 3 MODELLI ESEMPIO **********/
   const TEST_DEFINITIONS = [
@@ -1623,4 +1625,72 @@
 
     // Genera e scarica il PDF
     html2pdf().set(opt).from(htmlContent).save();
-  };
+  }
+
+  /********** LOGIN SYSTEM **********/
+  function initLoginSystem() {
+    const loginForm = document.getElementById('login-form');
+    const loginPasswordInput = document.getElementById('login-password');
+    const loginError = document.getElementById('login-error');
+    const logoutBtn = document.getElementById('btn-logout');
+
+    // Check if user is already logged in this session
+    const isLoggedIn = sessionStorage.getItem(LOGIN_SESSION_KEY) === 'true';
+    if (isLoggedIn) {
+      showLoginPage(false);
+    } else {
+      showLoginPage(true);
+    }
+
+    // Login form submission
+    loginForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const password = loginPasswordInput.value.trim();
+      
+      if (password === APP_PASSWORD) {
+        sessionStorage.setItem(LOGIN_SESSION_KEY, 'true');
+        loginError.textContent = '';
+        loginPasswordInput.value = '';
+        showLoginPage(false);
+      } else {
+        loginError.textContent = 'Password non corretta. Riprova.';
+        loginPasswordInput.value = '';
+        loginPasswordInput.focus();
+      }
+    });
+
+    // Logout button
+    logoutBtn.addEventListener('click', () => {
+      if (confirm('Vuoi disconnetterti?')) {
+        sessionStorage.removeItem(LOGIN_SESSION_KEY);
+        showLoginPage(true);
+        loginPasswordInput.focus();
+        loginError.textContent = '';
+      }
+    });
+  }
+
+  function showLoginPage(show) {
+    const loginView = document.getElementById('view-login');
+    const appHeader = document.querySelector('header');
+    const mainContent = document.querySelector('main:not(#view-login)');
+    const sections = document.querySelectorAll('section');
+
+    if (show) {
+      loginView.classList.remove('hidden');
+      appHeader.classList.add('hidden');
+      mainContent && mainContent.classList.add('hidden');
+      sections.forEach(s => s.classList.add('hidden'));
+    } else {
+      loginView.classList.add('hidden');
+      appHeader.classList.remove('hidden');
+      mainContent && mainContent.classList.remove('hidden');
+    }
+  }
+
+  /********** INIT **********/
+  document.addEventListener('DOMContentLoaded', () => {
+    initLoginSystem();
+    initializeApp();
+  });
+})();
