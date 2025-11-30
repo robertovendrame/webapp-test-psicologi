@@ -1,5 +1,8 @@
 # 📋 Ilaria Tests – Strumento Locale per Somministrazione Test Psicologici
 
+[![Deploy to GitHub Pages](https://github.com/robertovendrame/webapp-test-psicologi/actions/workflows/deploy.yml/badge.svg)](https://github.com/robertovendrame/webapp-test-psicologi/actions/workflows/deploy.yml)
+[![GitHub Pages](https://img.shields.io/badge/pages-Online-brightgreen)](https://robertovendrame.github.io/webapp-test-psicologi/)
+
 Un'applicazione **client-side** per la somministrazione, scoring e documentazione di test psicologici. Funziona completamente in locale senza server backend.
 
 ---
