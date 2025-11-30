@@ -319,24 +319,42 @@
     return !!(window.PublicKeyCredential && navigator.credentials);
   }
 
+  async function isPlatformAuthenticatorAvailable() {
+    if (!window.PublicKeyCredential || !PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) return false;
+    try {
+      return await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+    } catch (e) {
+      console.warn('isPlatformAuthenticatorAvailable check failed', e);
+      return false;
+    }
+  }
+
   async function registerWebAuthn() {
-    if (!isWebAuthnSupported()) throw new Error('WebAuthn non supportato');
+    if (!isWebAuthnSupported()) throw new Error('WebAuthn non supportato dal browser');
+    const platformAvailable = await isPlatformAuthenticatorAvailable();
+    if (!platformAvailable) throw new Error('Nessun autenticatore di piattaforma disponibile (Touch ID/Face ID)');
     const challenge = crypto.getRandomValues(new Uint8Array(32));
     const userId = crypto.getRandomValues(new Uint8Array(16));
     const publicKey = {
-      challenge: challenge,
+      challenge: challenge.buffer || challenge,
       rp: { name: APP_NAME },
-      user: { id: userId, name: 'local', displayName: 'Local User' },
+      user: { id: userId.buffer || userId, name: 'local', displayName: 'Local User' },
       pubKeyCredParams: [{ type: 'public-key', alg: -7 }],
       timeout: 60000,
-      attestation: 'none'
+      attestation: 'none',
+      authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'preferred' }
     };
-    const cred = await navigator.credentials.create({ publicKey });
-    if (!cred) throw new Error('Creazione credenziale fallita');
-    const rawId = cred.rawId;
-    const b64 = arrayBufferToBase64(rawId);
-    setStoredWebAuthnId(b64);
-    return b64;
+    try {
+      const cred = await navigator.credentials.create({ publicKey });
+      if (!cred) throw new Error('Creazione credenziale fallita (risposta nulla)');
+      const rawId = cred.rawId;
+      const b64 = arrayBufferToBase64(rawId);
+      setStoredWebAuthnId(b64);
+      return b64;
+    } catch (err) {
+      console.error('registerWebAuthn error', err);
+      throw new Error(err && err.message ? String(err.message) : 'Errore creazione credenziale');
+    }
   }
 
   async function authenticateWebAuthn() {
