@@ -213,7 +213,34 @@
     return bytes.buffer;
   }
 
-  async function deriveKeyBits(password, saltB64, iterations = 150000) {
+  // PBKDF2 iterations storage and auto-tune helper
+  function getStoredPbkdf2Iterations() {
+    const v = Number(localStorage.getItem('ilaria_psy_pbkdf2_iters') || '0');
+    return v > 0 ? v : null;
+  }
+
+  async function autoTunePbkdf2(targetMs = 250, baseIterations = 50000, maxIterations = 500000) {
+    try {
+      const t0 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+      // use a short, fixed derivation to estimate speed
+      await deriveKeyBits('__tune__', null, baseIterations);
+      const t1 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+      const elapsed = Math.max(1, t1 - t0);
+      let estimated = Math.round(baseIterations * (targetMs / elapsed));
+      estimated = Math.max(1000, Math.min(maxIterations, estimated));
+      localStorage.setItem('ilaria_psy_pbkdf2_iters', String(estimated));
+      return { iterations: estimated, measuredMs: elapsed };
+    } catch (err) {
+      console.warn('autoTunePbkdf2 failed', err);
+      return null;
+    }
+  }
+
+  async function deriveKeyBits(password, saltB64, iterations) {
+    if (typeof iterations === 'undefined' || iterations === null) {
+      const stored = getStoredPbkdf2Iterations();
+      iterations = stored || 150000;
+    }
     const enc = new TextEncoder();
     const pwBuf = enc.encode(password);
     const key = await crypto.subtle.importKey('raw', pwBuf, 'PBKDF2', false, ['deriveBits']);
@@ -265,6 +292,13 @@
         const { salt, derived, iterations } = await deriveKeyBits(APP_PASSWORD, null);
         setStoredAuth({ salt, hash: derived, iterations });
         console.log('Auth initialized (migrated default password)');
+        // Try to auto-tune PBKDF2 iterations for this device to target ~200-300ms
+        try {
+          const tune = await autoTunePbkdf2(250);
+          if (tune && tune.iterations) console.log('PBKDF2 tuned to', tune.iterations, 'iterations (', Math.round(tune.measuredMs), 'ms)');
+        } catch (e) {
+          console.warn('PBKDF2 auto-tune skipped:', e);
+        }
       } catch (err) {
         console.error('Failed to initialize auth:', err);
       }
