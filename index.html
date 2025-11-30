@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <title>Ilaria Tests</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <link rel="stylesheet" href="assets/style.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
+  <style>
+    /* Modal conferma eliminazione paziente */
+    #confirm-delete-patient-modal {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.35);
+      z-index: 9999;
+      padding: 1rem;
+    }
+
+    #confirm-delete-patient-modal.active {
+      display: flex;
+    }
+
+    #confirm-delete-patient-modal .modal {
+      background: rgba(255,255,255,0.98);
+      border-radius: 0.75rem;
+      padding: 1rem;
+      max-width: 480px;
+      width: 100%;
+      box-shadow: 0 12px 30px rgba(2,6,23,0.25);
+    }
+
+    #confirm-delete-patient-modal .modal h3 {
+      margin: 0 0 0.5rem 0;
+      font-size: 1.05rem;
+    }
+
+    #confirm-delete-patient-modal .modal .modal-actions {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: flex-end;
+      margin-top: 1rem;
+    }
+
+    .btn.danger {
+      background: linear-gradient(135deg, #dc2626, #b91c1c);
+      color: white;
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div>
+      <h1 id="app-title">Ilaria Tests</h1>
+      <div class="subtitle">Strumento locale per la somministrazione e lo scoring dei test.</div>
+    </div>
+    <div class="top-nav">
+      <button class="btn ghost small" id="btn-go-home">
+        <span class="icon">🏠</span> Home
+      </button>
+    </div>
+  </header>
+
+  <!-- HOME -->
+  <main id="view-home">
+    <div class="home-hero">
+      <div class="home-hero-title">Benvenuta, Ilaria.</div>
+      <div class="home-hero-subtitle">
+        Anagrafica pazienti, test strutturati, storico, export dei test e scoring separato.
+        Tutto rimane sul dispositivo.
+      </div>
+    </div>
+
+    <div class="home-actions">
+      <div class="home-card-btn" id="home-new-test">
+        <div class="home-card-icon">🧾</div>
+        <div class="home-card-title">Nuovo test</div>
+        <div class="home-card-description">Seleziona paziente, scegli il test e compila.</div>
+      </div>
+
+      <div class="home-card-btn" id="home-patients">
+        <div class="home-card-icon">👤</div>
+        <div class="home-card-title">Pazienti</div>
+        <div class="home-card-description">Anagrafica + test per paziente.</div>
+      </div>
+
+      <div class="home-card-btn" id="home-history">
+        <div class="home-card-icon">📚</div>
+        <div class="home-card-title">Storico</div>
+        <div class="home-card-description">Tutti i test svolti (con PIN).</div>
+      </div>
+
+      <div class="home-card-btn" id="home-scoring">
+        <div class="home-card-icon">📊</div>
+        <div class="home-card-title">Scoring</div>
+        <div class="home-card-description">Seleziona test e calcola lo scoring.</div>
+      </div>
+
+      <div class="home-card-btn" id="home-settings">
+        <div class="home-card-icon">⚙️</div>
+        <div class="home-card-title">Impostazioni</div>
+        <div class="home-card-description">PIN storico e reset dati.</div>
+      </div>
+    </div>
+
+    <div class="home-badge-row">
+      <span class="badge">Locale</span>
+      <span class="badge">Nessun cloud</span>
+      <span class="badge">iPad ready</span>
+    </div>
+  </main>
+
+  <!-- NUOVO TEST (STEP 1-2-3) -->
+  <section id="view-new" class="hidden">
+    <div class="top-nav">
+      <button class="btn ghost small btn-back-home">← Home</button>
+      <span class="top-nav-title" id="new-test-step-title">Nuovo test – Step 1/3</span>
+    </div>
+
+    <!-- STEP 1: PAZIENTE -->
+    <div class="card" id="new-step-1-card">
+      <h2>Step 1 – Seleziona paziente</h2>
+      <div class="field">
+        <label for="new-patient-select">Paziente</label>
+        <select id="new-patient-select"></select>
+        <div class="muted">
+          I pazienti si gestiscono nella sezione “Pazienti”. Se non trovi nessuno, aggiungili da lì.
+        </div>
+      </div>
+      <div class="btn-group">
+        <button class="btn primary small" id="new-step-1-next">Avanti</button>
+        <span class="muted" id="new-step-1-status"></span>
+      </div>
+    </div>
+
+    <!-- STEP 2: TEST -->
+    <div class="card hidden" id="new-step-2-card">
+      <h2>Step 2 – Scegli il test</h2>
+      <p class="muted">
+        Seleziona quale strumento vuoi somministrare a <span id="new-step-2-patient-name">—</span>.
+      </p>
+      <div id="test-buttons-container" class="test-buttons"></div>
+      <div class="muted" id="test-history-note" style="margin-top:0.5rem;"></div>
+      <div class="btn-group" style="margin-top:0.75rem;">
+        <button class="btn outline small" id="new-step-2-back">← Indietro</button>
+      </div>
+    </div>
+
+    <!-- STEP 3: COMPILAZIONE -->
+    <div class="card hidden new-step-3">
+      <h2>Step 3 – Compilazione</h2>
+      <p class="muted">
+        Paziente: <strong id="new-step-3-patient-label">—</strong><br />
+        Test: <strong id="new-step-3-test-label">—</strong><br />
+        <span id="new-step-3-timer" class="muted">Tempo: 0:00</span>
+      </p>
+      <div class="field">
+        <label for="session-date">Data</label>
+        <input type="date" id="session-date" />
+      </div>
+      <div class="field">
+        <label for="notes">Note (opzionali)</label>
+        <textarea id="notes" placeholder="Es. contesto, osservazioni cliniche, setting, ecc."></textarea>
+      </div>
+    </div>
+
+    <div class="card hidden new-step-3">
+      <h2>Domande</h2>
+      <div id="questions-container" class="questions-list"></div>
+    </div>
+
+    <div class="card hidden new-step-3">
+      <div class="btn-group">
+        <button class="btn primary" id="btn-save">
+          <span class="icon">💾</span> Salva test
+        </button>
+        <button class="btn outline" id="btn-print">
+          <span class="icon">🖨️</span> Stampa / PDF
+        </button>
+        <button class="btn outline" id="btn-email">
+          ✉️ Email
+        </button>
+        <button class="btn ghost small" id="new-step-3-back">← Indietro</button>
+        <span class="muted" id="save-status"></span>
+      </div>
+    </div>
+
+    <div class="card hidden new-step-3">
+      <h2>Risultato (a video)</h2>
+      <div id="result-summary" class="muted">
+        Compila il test e premi “Salva test” per vedere il punteggio.
+      </div>
+    </div>
+  </section>
+
+  <!-- STORICO -->
+  <section id="view-history" class="hidden">
+    <div class="top-nav">
+      <button class="btn ghost small btn-back-home">← Home</button>
+      <span class="top-nav-title">Storico test compilati</span>
+    </div>
+
+    <div class="card">
+      <h2>Storico</h2>
+      <div class="muted" id="history-empty">Nessun test salvato al momento.</div>
+      <div id="history-table-wrapper" class="hidden">
+        <table>
+          <thead>
+          <tr>
+            <th>Data</th>
+            <th>Paziente</th>
+            <th>Test</th>
+            <th>Punteggio</th>
+            <th>Durata</th>
+            <th></th>
+          </tr>
+          </thead>
+          <tbody id="history-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card hidden" id="history-detail-card">
+      <h2 id="history-detail-title">Dettaglio test</h2>
+      <div id="history-detail-body"></div>
+      <div class="btn-group" style="margin-top: 0.75rem;">
+        <button class="btn outline small" id="btn-history-print">🖨️ Stampa / PDF (solo test)</button>
+        <button class="btn outline small" id="btn-history-email">✉️ Email (solo test)</button>
+        <button class="btn outline small" onclick="downloadPDFReport('history')">⬇️ Scarica PDF</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- IMPOSTAZIONI -->
+  <section id="view-settings" class="hidden">
+    <div class="top-nav">
+      <button class="btn ghost small btn-back-home">← Home</button>
+      <span class="top-nav-title">Impostazioni</span>
+    </div>
+
+    <div class="card">
+      <h2>Protezione storico</h2>
+      <div class="field">
+        <label for="settings-pin">PIN per lo storico</label>
+        <input type="password" inputmode="numeric" id="settings-pin" placeholder="Imposta o modifica il PIN (es. 4 cifre)" />
+        <div class="muted">
+          Il PIN protegge l’accesso allo storico. Non è una cifratura “militare”, ma evita occhi indiscreti.
+        </div>
+      </div>
+      <div class="field">
+        <label>
+          <input type="checkbox" id="settings-remember-session" />
+          Ricorda PIN per questa sessione (finché non chiudi Safari)
+        </label>
+      </div>
+      <div class="btn-group">
+        <button class="btn primary small" id="btn-save-pin">Salva PIN</button>
+        <button class="btn outline small" id="btn-remove-pin">Rimuovi PIN</button>
+        <span class="muted" id="settings-pin-status"></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Dati salvati</h2>
+      <p class="muted">
+        Tutti i dati (pazienti e test) sono salvati localmente nel browser. Qui puoi azzerare completamente l’app.
+      </p>
+      <button class="btn outline small" id="btn-clear-all">
+        🗑️ Cancella tutti i dati (pazienti + storico + PIN)
+      </button>
+    </div>
+  </section>
+
+  <!-- SCHERMATA INSERIMENTO PIN -->
+  <section id="view-pin-lock" class="hidden">
+    <div class="top-nav">
+      <button class="btn ghost small btn-back-home">← Home</button>
+      <span class="top-nav-title">Sblocca storico</span>
+    </div>
+
+    <div class="card">
+      <h2>Inserisci PIN</h2>
+      <p class="muted">
+        Inserisci il PIN impostato nelle impostazioni per accedere allo storico dei test.
+      </p>
+      <div class="field pin-input-row">
+        <div style="flex:1;">
+          <label for="pin-lock-input">PIN</label>
+          <input type="password" inputmode="numeric" id="pin-lock-input" />
+        </div>
+        <button class="btn primary small" id="btn-pin-unlock">Sblocca</button>
+        <button class="btn outline small" id="btn-pin-cancel">Annulla</button>
+      </div>
+      <div class="muted" id="pin-lock-status"></div>
+    </div>
+  </section>
+
+  <!-- PAZIENTI -->
+  <section id="view-patients" class="hidden">
+    <div class="top-nav">
+      <button class="btn ghost small btn-back-home">← Home</button>
+      <span class="top-nav-title">Pazienti</span>
+    </div>
+
+    <div class="card">
+      <h2>Anagrafica paziente</h2>
+      <div class="field">
+        <label for="patient-form-name">Nome e cognome</label>
+        <input type="text" id="patient-form-name" />
+      </div>
+      <div class="field">
+        <label for="patient-form-birth">Data di nascita</label>
+        <input type="date" id="patient-form-birth" />
+      </div>
+      <div class="field">
+        <label for="patient-form-sex">Sesso</label>
+        <select id="patient-form-sex">
+          <option value="">Non specificato</option>
+          <option value="F">F</option>
+          <option value="M">M</option>
+          <option value="Altro">Altro</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="patient-form-email">Email</label>
+        <input type="email" id="patient-form-email" placeholder="Es. nome.cognome@example.com" />
+      </div>
+      <div class="field">
+        <label for="patient-form-notes">Note (es. contatti, info di contesto)</label>
+        <textarea id="patient-form-notes"></textarea>
+      </div>
+      <div class="btn-group">
+        <button class="btn primary small" id="btn-patient-save">Salva paziente</button>
+        <button class="btn outline small" id="btn-patient-new">Nuovo</button>
+        <button class="btn outline small" id="btn-patient-delete">🗑️ Elimina paziente</button>
+        <span class="muted" id="patient-form-status"></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Elenco pazienti</h2>
+      <div class="muted" id="patients-empty">Nessun paziente presente. Aggiungi il primo sopra.</div>
+      <div id="patients-table-wrapper" class="hidden">
+        <table>
+          <thead>
+          <tr>
+            <th>Nome</th>
+            <th>Età</th>
+            <th>Sesso</th>
+          </tr>
+          </thead>
+          <tbody id="patient-list-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card hidden" id="patient-tests-card">
+      <h2 id="patient-tests-title">Test del paziente</h2>
+      <p class="muted" id="patient-tests-empty">Nessun test salvato per questo paziente.</p>
+      <div id="patient-tests-table-wrapper" class="hidden">
+        <table>
+          <thead>
+          <tr>
+            <th>Data</th>
+            <th>Test</th>
+            <th>Punteggio</th>
+            <th>Durata</th>
+          </tr>
+          </thead>
+          <tbody id="patient-tests-body"></tbody>
+        </table>
+        <p class="muted" style="margin-top:0.5rem;">
+          Tocca un test per vedere il dettaglio, stamparlo o inviarlo via mail.
+        </p>
+      </div>
+      <div class="btn-group" style="margin-top:0.75rem;">
+        <button class="btn outline small" id="btn-patient-new-test">🧾 Nuovo test per questo paziente</button>
+      </div>
+    </div>
+
+    <div class="card hidden" id="patient-test-detail-card">
+      <h2 id="patient-test-detail-title">Dettaglio test</h2>
+      <div id="patient-test-detail-body"></div>
+      <div class="btn-group" style="margin-top:0.75rem;">
+        <button class="btn outline small" id="btn-patient-test-print">🖨️ Stampa / PDF (solo test)</button>
+        <button class="btn outline small" id="btn-patient-test-email">✉️ Email (solo test)</button>
+        <button class="btn outline small" onclick="downloadPDFReport('patient')">⬇️ Scarica PDF</button>
+        <button class="btn outline small" id="btn-patient-test-delete">🗑️ Elimina</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- SCORING -->
+  <section id="view-scoring" class="hidden">
+    <div class="top-nav">
+      <button class="btn ghost small btn-back-home">← Home</button>
+      <span class="top-nav-title">Scoring</span>
+    </div>
+
+    <div class="card">
+      <h2>Step 1 – Seleziona paziente</h2>
+      <div class="field">
+        <label for="scoring-patient-select">Paziente</label>
+        <select id="scoring-patient-select"></select>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Step 2 – Seleziona test</h2>
+      <p class="muted" id="scoring-tests-empty">Seleziona un paziente per vedere i test disponibili.</p>
+      <div id="scoring-tests-table-wrapper" class="hidden">
+        <table>
+          <thead>
+          <tr>
+            <th>Data</th>
+            <th>Test</th>
+            <th>Punteggio</th>
+            <th>Durata</th>
+          </tr>
+          </thead>
+          <tbody id="scoring-tests-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card hidden" id="scoring-detail-card">
+      <h2 id="scoring-detail-title">Scoring</h2>
+      <div id="scoring-detail-body"></div>
+      <div class="btn-group" style="margin-top:0.75rem;">
+        <button class="btn outline small" id="btn-scoring-print">🖨️ Stampa / PDF (con scoring)</button>
+        <button class="btn outline small" onclick="downloadPDFReport('scoring')">⬇️ Scarica PDF</button>
+        <button class="btn outline small" id="btn-scoring-delete">🗑️ Elimina test</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- REPORT PER STAMPA -->
+  <section id="printable-report"></section>
+</div>
+
+<!-- Modal conferma eliminazione paziente -->
+<div id="confirm-delete-patient-modal" class="hidden" aria-hidden="true">
+  <div class="modal">
+    <h3 id="confirm-delete-patient-title">Conferma eliminazione</h3>
+    <div id="confirm-delete-patient-body" class="muted">Confermi l'eliminazione del paziente?</div>
+    <div style="margin-top:0.5rem;">
+      <label style="display:block; margin-top:0.4rem;"><input type="radio" name="delete_patient_tests" value="keep" checked> Conserva i test associati</label>
+      <label style="display:block; margin-top:0.2rem;"><input type="radio" name="delete_patient_tests" value="remove"> Elimina anche i test associati</label>
+    </div>
+    <div class="modal-actions">
+      <button class="btn outline small" id="btn-cancel-delete-patient">Annulla</button>
+      <button class="btn danger small" id="btn-confirm-delete-patient">Conferma eliminazione</button>
+    </div>
+  </div>
+</div>
+
+<script src="assets/app.js" defer></script>
+</body>
+</html>
