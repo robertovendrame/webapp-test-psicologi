@@ -1634,8 +1634,24 @@
     const loginError = document.getElementById('login-error');
     const logoutBtn = document.getElementById('btn-logout');
 
+    // Debug: verify all elements exist
+    console.log('Login System Init:', {
+      loginForm: !!loginForm,
+      loginPasswordInput: !!loginPasswordInput,
+      loginError: !!loginError,
+      logoutBtn: !!logoutBtn,
+      APP_PASSWORD: APP_PASSWORD
+    });
+
+    // Guard: exit if elements missing
+    if (!loginForm || !loginPasswordInput || !loginError) {
+      console.error('Login elements not found in DOM');
+      return;
+    }
+
     // Check if user is already logged in this session
     const isLoggedIn = sessionStorage.getItem(LOGIN_SESSION_KEY) === 'true';
+    console.log('Is logged in:', isLoggedIn);
     if (isLoggedIn) {
       showLoginPage(false);
     } else {
@@ -1646,28 +1662,33 @@
     loginForm.addEventListener('submit', (e) => {
       e.preventDefault();
       const password = loginPasswordInput.value.trim();
+      console.log('Login attempt with password:', password, 'Expected:', APP_PASSWORD);
       
       if (password === APP_PASSWORD) {
+        console.log('Login SUCCESS');
         sessionStorage.setItem(LOGIN_SESSION_KEY, 'true');
         loginError.textContent = '';
         loginPasswordInput.value = '';
         showLoginPage(false);
       } else {
+        console.log('Login FAILED');
         loginError.textContent = 'Password non corretta. Riprova.';
         loginPasswordInput.value = '';
         loginPasswordInput.focus();
       }
     });
 
-    // Logout button
-    logoutBtn.addEventListener('click', () => {
-      if (confirm('Vuoi disconnetterti?')) {
-        sessionStorage.removeItem(LOGIN_SESSION_KEY);
-        showLoginPage(true);
-        loginPasswordInput.focus();
-        loginError.textContent = '';
-      }
-    });
+    // Logout button (guard if not present)
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', () => {
+        if (confirm('Vuoi disconnetterti?')) {
+          sessionStorage.removeItem(LOGIN_SESSION_KEY);
+          showLoginPage(true);
+          loginPasswordInput.focus();
+          loginError.textContent = '';
+        }
+      });
+    }
   }
 
   function showLoginPage(show) {
