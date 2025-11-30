@@ -1695,17 +1695,19 @@
     const loginView = document.getElementById('view-login');
     const appHeader = document.querySelector('header');
     const sections = document.querySelectorAll('section');
-
     if (show) {
-      // Mostro login, nascondo tutto il resto
+      // Mostro login, nascondo tutto il resto (tutte le view)
       loginView.classList.remove('hidden');
       appHeader && appHeader.classList.add('hidden');
-      sections.forEach(s => s.classList.add('hidden'));
+      // Nascondi tutte le views gestite da showView
+      Object.values(views).forEach(v => v && v.classList.add('hidden'));
     } else {
-      // Nascondo login, mostro app
+      // Nascondo login, mostro la view principale (home)
       loginView.classList.add('hidden');
       appHeader && appHeader.classList.remove('hidden');
-      sections.forEach(s => s.classList.remove('hidden'));
+      // Mostra solo la home come view di default dopo il login
+      if (typeof showView === 'function') showView('home');
+      else Object.values(views).forEach(v => v && v.classList.remove('hidden'));
     }
   }
 
