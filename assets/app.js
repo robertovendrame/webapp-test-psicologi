@@ -1673,18 +1673,18 @@
   function showLoginPage(show) {
     const loginView = document.getElementById('view-login');
     const appHeader = document.querySelector('header');
-    const mainContent = document.querySelector('main:not(#view-login)');
     const sections = document.querySelectorAll('section');
 
     if (show) {
+      // Mostro login, nascondo tutto il resto
       loginView.classList.remove('hidden');
-      appHeader.classList.add('hidden');
-      mainContent && mainContent.classList.add('hidden');
+      appHeader && appHeader.classList.add('hidden');
       sections.forEach(s => s.classList.add('hidden'));
     } else {
+      // Nascondo login, mostro app
       loginView.classList.add('hidden');
-      appHeader.classList.remove('hidden');
-      mainContent && mainContent.classList.remove('hidden');
+      appHeader && appHeader.classList.remove('hidden');
+      sections.forEach(s => s.classList.remove('hidden'));
     }
   }
 
