@@ -5,6 +5,11 @@ on:
     branches:
       - main
 
+# Grant the workflow token the necessary write permissions to push to gh-pages
+permissions:
+  contents: write
+  pages: write
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
